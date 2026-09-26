@@ -2,15 +2,20 @@ package com.example.otpsmsforwarder
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.database.Cursor
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.ContactsContract
 import android.telephony.SubscriptionManager
 import android.view.Gravity
 import android.view.View
 import android.widget.*
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -20,6 +25,26 @@ class MainActivity : AppCompatActivity() {
 
     private val PERMISSION_REQUEST_CODE = 101
     private lateinit var rulesContainer: LinearLayout
+    private var pendingTargetEditText: EditText? = null
+
+    // لانچر انتخاب مخاطب از دفترچه تلفن گوشی
+    private val contactPickerLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            val contactUri: Uri? = result.data?.data
+            if (contactUri != null) {
+                val phoneNumber = retrievePhoneNumberFromUri(contactUri)
+                if (!phoneNumber.isNullOrEmpty()) {
+                    pendingTargetEditText?.setText(cleanPhoneNumber(phoneNumber))
+                    Toast.makeText(this, "شماره انتخاب شد: $phoneNumber", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "این مخاطب شماره تلفن ذخیره‌شده ندارد", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+        pendingTargetEditText = null
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,7 +78,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, 0, 0, 24)
         }
 
-        // کارت اطلاعات سیم‌کارت‌های فعال گوشی
+        // کارت وضعیت سیم‌کارت‌های فعال گوشی
         val simInfoCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(24, 20, 24, 20)
@@ -78,7 +103,7 @@ class MainActivity : AppCompatActivity() {
         simInfoCard.addView(simTitle)
         simInfoCard.addView(simDesc)
 
-        // دکمه افزودن پروژه / موضوع جدید
+        // دکمه افزودن پروژه جدید
         val addProjectBtn = Button(this).apply {
             text = "➕ افزودن پروژه یا موضوع جدید"
             setTextColor(Color.BLACK)
@@ -89,6 +114,9 @@ class MainActivity : AppCompatActivity() {
                 RuleEditDialog(
                     context = this@MainActivity,
                     existingRule = null,
+                    onPickContactRequested = { targetInput ->
+                        pickContactForInput(targetInput)
+                    },
                     onSaveListener = { newRule ->
                         RuleRepository.saveRule(this@MainActivity, newRule)
                         refreshRulesList()
@@ -122,6 +150,44 @@ class MainActivity : AppCompatActivity() {
         setContentView(scrollView)
 
         refreshRulesList()
+    }
+
+    private fun pickContactForInput(targetInput: EditText) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_CONTACTS), 202)
+            Toast.makeText(this, "لطفاً دسترسی به مخاطبین را تأیید کنید", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        pendingTargetEditText = targetInput
+        val intent = Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI)
+        contactPickerLauncher.launch(intent)
+    }
+
+    private fun retrievePhoneNumberFromUri(uri: Uri): String? {
+        val projection = arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER)
+        var cursor: Cursor? = null
+        return try {
+            cursor = contentResolver.query(uri, projection, null, null, null)
+            if (cursor != null && cursor.moveToFirst()) {
+                val numberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                if (numberIndex != -1) {
+                    cursor.getString(numberIndex)
+                } else null
+            } else null
+        } catch (e: Exception) {
+            null
+        } finally {
+            cursor?.close()
+        }
+    }
+
+    private fun cleanPhoneNumber(phone: String): String {
+        return phone.replace(" ", "")
+            .replace("-", "")
+            .replace("(", "")
+            .replace(")", "")
+            .replace("+98", "0")
     }
 
     private fun refreshRulesList() {
@@ -227,6 +293,9 @@ class MainActivity : AppCompatActivity() {
                     RuleEditDialog(
                         context = this@MainActivity,
                         existingRule = rule,
+                        onPickContactRequested = { targetInput ->
+                            pickContactForInput(targetInput)
+                        },
                         onSaveListener = { updatedRule ->
                             RuleRepository.saveRule(this@MainActivity, updatedRule)
                             refreshRulesList()
@@ -294,7 +363,8 @@ class MainActivity : AppCompatActivity() {
             Manifest.permission.RECEIVE_SMS,
             Manifest.permission.READ_SMS,
             Manifest.permission.SEND_SMS,
-            Manifest.permission.READ_PHONE_STATE
+            Manifest.permission.READ_PHONE_STATE,
+            Manifest.permission.READ_CONTACTS
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)

@@ -15,6 +15,7 @@ import android.widget.*
 class RuleEditDialog(
     private val context: Context,
     private val existingRule: ForwardRule?,
+    private val onPickContactRequested: ((EditText) -> Unit),
     private val onSaveListener: (ForwardRule) -> Unit
 ) {
 
@@ -71,7 +72,7 @@ class RuleEditDialog(
             setPadding(16, 16, 16, 16)
         }
 
-        // ۴. بخش شماره‌های مقصد (فوروارد) با کیبورد عددی و دکمه افزودن شماره
+        // ۴. بخش شماره‌های مقصد با کیبورد عددی + دکمه مخاطبین 👤 + دکمه حذف ✕
         val targetsContainer = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
         }
@@ -84,7 +85,7 @@ class RuleEditDialog(
                 setPadding(0, 6, 0, 6)
             }
             val numInput = EditText(context).apply {
-                hint = "شماره مقصد (مثال: 09121234567)"
+                hint = "شماره مقصد دستی یا انتخابی"
                 inputType = InputType.TYPE_CLASS_PHONE
                 setTextColor(Color.WHITE)
                 setHintTextColor(Color.GRAY)
@@ -95,6 +96,23 @@ class RuleEditDialog(
             }
             targetEditList.add(numInput)
 
+            // دکمه انتخاب از مخاطبین
+            val contactBtn = Button(context).apply {
+                text = "👤 مخاطبین"
+                textSize = 12f
+                setTextColor(Color.parseColor("#FDE68A"))
+                background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#311A54"))
+                    cornerRadius = 12f
+                    setStroke(1, Color.parseColor("#F59E0B"))
+                }
+                setPadding(16, 12, 16, 12)
+                setOnClickListener {
+                    onPickContactRequested(numInput)
+                }
+            }
+
+            // دکمه حذف ردیف
             val removeBtn = Button(context).apply {
                 text = "✕"
                 setTextColor(Color.parseColor("#EF4444"))
@@ -103,6 +121,7 @@ class RuleEditDialog(
                     setColor(Color.parseColor("#27153B"))
                     cornerRadius = 12f
                 }
+                setPadding(16, 12, 16, 12)
                 setOnClickListener {
                     targetsContainer.removeView(row)
                     targetEditList.remove(numInput)
@@ -110,12 +129,13 @@ class RuleEditDialog(
             }
 
             row.addView(numInput)
-            row.addView(spaceH(10))
+            row.addView(spaceH(8))
+            row.addView(contactBtn)
+            row.addView(spaceH(8))
             row.addView(removeBtn)
             targetsContainer.addView(row)
         }
 
-        // پر کردن مقادیر قبلی یا حداقل یک فیلد خالی
         if (rule.targetNumbers.isNotEmpty()) {
             rule.targetNumbers.forEach { addTargetRow(it) }
         } else {
@@ -134,7 +154,7 @@ class RuleEditDialog(
             setOnClickListener { addTargetRow() }
         }
 
-        // ۵. بخش شماره‌های مبدأ (فرستنده) با کیبورد عددی و دکمه افزودن شماره
+        // ۵. بخش شماره‌های مبدأ با کیبورد عددی + دکمه مخاطبین 👤 + دکمه حذف ✕
         val sendersContainer = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
         }
@@ -147,7 +167,7 @@ class RuleEditDialog(
                 setPadding(0, 6, 0, 6)
             }
             val numInput = EditText(context).apply {
-                hint = "شماره مبدأ (مثال: 2000... یا شماره بانک)"
+                hint = "شماره مبدأ یا فرستنده خاص"
                 inputType = InputType.TYPE_CLASS_PHONE
                 setTextColor(Color.WHITE)
                 setHintTextColor(Color.GRAY)
@@ -158,6 +178,23 @@ class RuleEditDialog(
             }
             senderEditList.add(numInput)
 
+            // دکمه انتخاب از مخاطبین
+            val contactBtn = Button(context).apply {
+                text = "👤 مخاطبین"
+                textSize = 12f
+                setTextColor(Color.parseColor("#DDD6FE"))
+                background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#27153B"))
+                    cornerRadius = 12f
+                    setStroke(1, Color.parseColor("#8B5CF6"))
+                }
+                setPadding(16, 12, 16, 12)
+                setOnClickListener {
+                    onPickContactRequested(numInput)
+                }
+            }
+
+            // دکمه حذف ردیف
             val removeBtn = Button(context).apply {
                 text = "✕"
                 setTextColor(Color.parseColor("#EF4444"))
@@ -166,6 +203,7 @@ class RuleEditDialog(
                     setColor(Color.parseColor("#27153B"))
                     cornerRadius = 12f
                 }
+                setPadding(16, 12, 16, 12)
                 setOnClickListener {
                     sendersContainer.removeView(row)
                     senderEditList.remove(numInput)
@@ -173,7 +211,9 @@ class RuleEditDialog(
             }
 
             row.addView(numInput)
-            row.addView(spaceH(10))
+            row.addView(spaceH(8))
+            row.addView(contactBtn)
+            row.addView(spaceH(8))
             row.addView(removeBtn)
             sendersContainer.addView(row)
         }
@@ -194,7 +234,7 @@ class RuleEditDialog(
             setOnClickListener { addSenderRow() }
         }
 
-        // ۶. کلمات کلیدی و شرط متن
+        // ۶. کلمات کلیدی و شرط متن پیامک
         val keywordsContainer = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
         }
@@ -225,6 +265,7 @@ class RuleEditDialog(
                     setColor(Color.parseColor("#27153B"))
                     cornerRadius = 12f
                 }
+                setPadding(16, 12, 16, 12)
                 setOnClickListener {
                     keywordsContainer.removeView(row)
                     keywordEditList.remove(kwInput)
@@ -232,7 +273,7 @@ class RuleEditDialog(
             }
 
             row.addView(kwInput)
-            row.addView(spaceH(10))
+            row.addView(spaceH(8))
             row.addView(removeBtn)
             keywordsContainer.addView(row)
         }
@@ -259,7 +300,7 @@ class RuleEditDialog(
             isChecked = rule.matchAllKeywords
         }
 
-        // دکمه ذخیره
+        // دکمه ذخیره نهایی
         val saveBtn = Button(context).apply {
             text = "ذخیره تغییرات پروژه"
             setTextColor(Color.BLACK)
@@ -307,13 +348,13 @@ class RuleEditDialog(
         root.addView(sendSimSpinner)
         root.addView(space(20))
 
-        root.addView(label("🎯 شماره‌های مقصد (پیامک به این خطوط فوروارد می‌شود):"))
+        root.addView(label("🎯 شماره‌های مقصد (دستی یا انتخاب از مخاطبین):"))
         root.addView(targetsContainer)
         root.addView(space(6))
         root.addView(addTargetBtn)
         root.addView(space(20))
 
-        root.addView(label("📞 شماره‌های مبدأ (اختیاری - اگر خالی باشد از همه شماره‌ها قبول می‌کند):"))
+        root.addView(label("📞 شماره‌های مبدأ (اختیاری - دستی یا از مخاطبین):"))
         root.addView(sendersContainer)
         root.addView(space(6))
         root.addView(addSenderBtn)

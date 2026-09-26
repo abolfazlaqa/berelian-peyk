@@ -7,9 +7,12 @@
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.SEND_SMS" />
     
-    <!-- مجوزهای حیاتی برای خواندن سیم‌کارت‌ها و وضعیت گوشی‌های چند سیم‌کارت -->
+    <!-- مجوزهای سیم‌کارت و تلفن -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     
+    <!-- مجوز خواندن مخاطبین برای انتخاب شماره مقصد و مبدأ از دفترچه تلفن -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
     <!-- مجوزهای پایداری و سرویس پس‌زمینه بدون توقف -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
