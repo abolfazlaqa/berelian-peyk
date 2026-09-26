@@ -1,0 +1,6 @@
+{
+  "name": "OTP SMS Auto Forwarder Studio",
+  "description": "سامانه مدیریت، شبیه‌ساز و ساخت اپلیکیشن اندروید هدایت خودکار پیامک و رمزهای یکبار مصرف (OTP)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
