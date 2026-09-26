@@ -9,19 +9,38 @@ object RuleRepository {
 
     fun getAllRules(context: Context): List<ForwardRule> {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val jsonStr = prefs.getString(KEY_RULES, null) ?: return defaultInitialRules()
+        val jsonStr = prefs.getString(KEY_RULES, null)
 
-        return try {
-            val array = JSONArray(jsonStr)
-            val list = mutableListOf<ForwardRule>()
-            for (i in 0 until array.length()) {
-                val obj = array.getJSONObject(i)
-                list.add(ForwardRule.fromJson(obj))
+        // اگر کاربر قبلاً ذخیره انجام داده (حتی اگر لیست خالی باشد)، لیست واقعی را برگردان
+        if (jsonStr != null) {
+            return try {
+                val array = JSONArray(jsonStr)
+                val list = mutableListOf<ForwardRule>()
+                for (i in 0 until array.length()) {
+                    val obj = array.getJSONObject(i)
+                    list.add(ForwardRule.fromJson(obj))
+                }
+                list // حتی اگر خالی باشد لیست خالی بازگردانده می‌شود تا دوباره پروژه دیفالت ظاهر نشود
+            } catch (e: Exception) {
+                emptyList()
             }
-            if (list.isEmpty()) defaultInitialRules() else list
-        } catch (e: Exception) {
-            defaultInitialRules()
         }
+
+        // فقط در اولین اجرای تاریخ نصب برنامه، یک پروژه نمونه بساز و فورا ذخیره کن
+        val initial = listOf(
+            ForwardRule(
+                title = "پروژه رمز پویا و بانک‌ها",
+                isEnabled = true,
+                receiveSimSlot = 0,
+                sendSimSlot = 0,
+                senderNumbers = listOf(),
+                targetNumbers = listOf(),
+                filterKeywords = listOf("رمز پویا", "کد تایید", "otp"),
+                matchAllKeywords = false
+            )
+        )
+        saveAll(context, initial)
+        return initial
     }
 
     fun saveRule(context: Context, rule: ForwardRule) {
@@ -54,20 +73,5 @@ object RuleRepository {
         val array = JSONArray()
         rules.forEach { array.put(it.toJson()) }
         prefs.edit().putString(KEY_RULES, array.toString()).apply()
-    }
-
-    private fun defaultInitialRules(): List<ForwardRule> {
-        return listOf(
-            ForwardRule(
-                title = "پروژه رمز پویا و بانک‌ها",
-                isEnabled = true,
-                receiveSimSlot = 0,
-                sendSimSlot = 0,
-                senderNumbers = listOf(),
-                targetNumbers = listOf(),
-                filterKeywords = listOf("رمز پویا", "کد تایید", "otp", "بانک"),
-                matchAllKeywords = false
-            )
-        )
     }
 }

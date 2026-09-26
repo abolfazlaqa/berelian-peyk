@@ -11,6 +11,7 @@ import android.telephony.SubscriptionManager
 import android.view.Gravity
 import android.view.View
 import android.widget.*
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -31,7 +32,7 @@ class MainActivity : AppCompatActivity() {
 
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(36, 48, 36, 48)
+            setPadding(36, 44, 36, 44)
             gravity = Gravity.CENTER_HORIZONTAL
         }
 
@@ -63,7 +64,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         val simTitle = TextView(this).apply {
-            text = "📱 سیم‌کارت‌های فعال در گوشی:"
+            text = "📱 وضعیت سیم‌کارت‌های فعال در گوشی:"
             setTextColor(Color.parseColor("#FDE68A"))
             textSize = 13f
             setPadding(0, 0, 0, 6)
@@ -77,7 +78,7 @@ class MainActivity : AppCompatActivity() {
         simInfoCard.addView(simTitle)
         simInfoCard.addView(simDesc)
 
-        // دکمه بزرگ ایجاد پروژه / موضوع جدید
+        // دکمه افزودن پروژه / موضوع جدید
         val addProjectBtn = Button(this).apply {
             text = "➕ افزودن پروژه یا موضوع جدید"
             setTextColor(Color.BLACK)
@@ -105,7 +106,6 @@ class MainActivity : AppCompatActivity() {
             gravity = Gravity.RIGHT
         }
 
-        // لیست داینامیک پروژه‌ها
         rulesContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
         }
@@ -130,11 +130,11 @@ class MainActivity : AppCompatActivity() {
 
         if (rules.isEmpty()) {
             val emptyTv = TextView(this).apply {
-                text = "هنوز پروژه‌ای ثبت نشده است.\nبرای شروع روی دکمه «افزودن پروژه جدید» بزنید."
+                text = "هیچ پروژه‌ای وجود ندارد.\nبرای شروع روی دکمه «افزودن پروژه جدید» بزنید."
                 setTextColor(Color.GRAY)
-                textSize = 13f
+                textSize = 14f
                 gravity = Gravity.CENTER
-                setPadding(0, 32, 0, 32)
+                setPadding(0, 40, 0, 40)
             }
             rulesContainer.addView(emptyTv)
             return
@@ -143,7 +143,7 @@ class MainActivity : AppCompatActivity() {
         for (rule in rules) {
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(28, 24, 28, 24)
+                setPadding(24, 20, 24, 20)
                 background = GradientDrawable().apply {
                     setColor(Color.parseColor("#150D2E"))
                     cornerRadius = 24f
@@ -151,7 +151,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            // سطر هدر پروژه: عنوان و سوئیچ فعال/غیرفعال
+            // سطر هدر کارت: عنوان پروژه + دکمه سطل آشغال 🗑️ + سوئیچ فعال/غیرفعال
             val headerRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -164,6 +164,31 @@ class MainActivity : AppCompatActivity() {
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             }
 
+            // دکمه سطل آشغال شکیل روی خود کارت
+            val deleteBtn = Button(this).apply {
+                text = "🗑️"
+                textSize = 16f
+                setTextColor(Color.parseColor("#EF4444"))
+                background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#271228"))
+                    cornerRadius = 12f
+                    setStroke(1, Color.parseColor("#EF4444"))
+                }
+                setPadding(16, 12, 16, 12)
+                setOnClickListener {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("حذف پروژه")
+                        .setMessage("آیا از حذف پروژه '${rule.title}' مطمئن هستید؟")
+                        .setPositiveButton("بله، حذف کن") { _, _ ->
+                            RuleRepository.deleteRule(this@MainActivity, rule.id)
+                            refreshRulesList()
+                            Toast.makeText(this@MainActivity, "پروژه حذف شد", Toast.LENGTH_SHORT).show()
+                        }
+                        .setNegativeButton("انصراف", null)
+                        .show()
+                }
+            }
+
             val switchBtn = Switch(this).apply {
                 isChecked = rule.isEnabled
                 setOnCheckedChangeListener { _, isChecked ->
@@ -173,9 +198,11 @@ class MainActivity : AppCompatActivity() {
             }
 
             headerRow.addView(projectTitleTv)
+            headerRow.addView(deleteBtn)
+            headerRow.addView(spaceH(12))
             headerRow.addView(switchBtn)
 
-            // جزئیات سیم‌کارت‌ها و شماره‌ها
+            // جزئیات خلاصه تنظیمات
             val detailsTv = TextView(this).apply {
                 val targetsText = if (rule.targetNumbers.isNotEmpty()) rule.targetNumbers.joinToString(", ") else "تعریف نشده!"
                 val sendersText = if (rule.senderNumbers.isNotEmpty()) rule.senderNumbers.joinToString(", ") else "تمام فرستنده‌ها"
@@ -188,11 +215,11 @@ class MainActivity : AppCompatActivity() {
                 textSize = 12f
                 setTextColor(Color.parseColor("#DDD6FE"))
                 setLineSpacing(4f, 1f)
-                setPadding(0, 12, 0, 16)
+                setPadding(0, 10, 0, 14)
             }
 
             val editBtn = Button(this).apply {
-                text = "⚙️ ویرایش پروژه و شماره‌ها"
+                text = "⚙️ ویرایش مشخصات و شماره‌ها"
                 setTextColor(Color.WHITE)
                 textSize = 12f
                 setBackgroundColor(Color.parseColor("#4338CA"))
@@ -204,11 +231,6 @@ class MainActivity : AppCompatActivity() {
                             RuleRepository.saveRule(this@MainActivity, updatedRule)
                             refreshRulesList()
                             Toast.makeText(this@MainActivity, "پروژه به‌روزرسانی شد", Toast.LENGTH_SHORT).show()
-                        },
-                        onDeleteListener = { ruleId ->
-                            RuleRepository.deleteRule(this@MainActivity, ruleId)
-                            refreshRulesList()
-                            Toast.makeText(this@MainActivity, "پروژه حذف گردید", Toast.LENGTH_SHORT).show()
                         }
                     ).show()
                 }
@@ -227,7 +249,7 @@ class MainActivity : AppCompatActivity() {
         return when (slot) {
             1 -> "سیم ۱"
             2 -> "سیم ۲"
-            else -> "پیش‌فرض"
+            else -> "هر دو سیم"
         }
     }
 
@@ -258,6 +280,12 @@ class MainActivity : AppCompatActivity() {
     private fun space(h: Int): View {
         return View(this).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, h)
+        }
+    }
+
+    private fun spaceH(w: Int): View {
+        return View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(w, LinearLayout.LayoutParams.MATCH_PARENT)
         }
     }
 

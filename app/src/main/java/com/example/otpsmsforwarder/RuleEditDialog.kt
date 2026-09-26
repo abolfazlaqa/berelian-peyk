@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
+import android.text.InputType
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -14,8 +15,7 @@ import android.widget.*
 class RuleEditDialog(
     private val context: Context,
     private val existingRule: ForwardRule?,
-    private val onSaveListener: (ForwardRule) -> Unit,
-    private val onDeleteListener: ((String) -> Unit)? = null
+    private val onSaveListener: (ForwardRule) -> Unit
 ) {
 
     fun show() {
@@ -36,7 +36,7 @@ class RuleEditDialog(
         }
 
         val headerText = TextView(context).apply {
-            text = if (isNew) "➕ تعریف پروژه / موضوع جدید" else "✏️ ویرایش پروژه: ${rule.title}"
+            text = if (isNew) "➕ تعریف پروژه یا موضوع جدید" else "✏️ ویرایش پروژه: ${rule.title}"
             textSize = 18f
             setTextColor(Color.parseColor("#FBBF24"))
             gravity = Gravity.CENTER
@@ -45,7 +45,7 @@ class RuleEditDialog(
 
         // ۱. عنوان موضوع / پروژه
         val titleInput = EditText(context).apply {
-            hint = "نام پروژه (مثلاً: حسابداری شرکت، بانک‌ها، تایید تلگرام)"
+            hint = "نام موضوع یا پروژه (مثلاً: بانک ملت، سامانه فروش)"
             setText(rule.title)
             setTextColor(Color.WHITE)
             setHintTextColor(Color.GRAY)
@@ -71,48 +71,199 @@ class RuleEditDialog(
             setPadding(16, 16, 16, 16)
         }
 
-        // ۴. چندین شماره مبدأ (با کاما یا خط جدید)
-        val sendersInput = EditText(context).apply {
-            hint = "شماره‌های مبدأ مجاز (با کاما یا خط بعد جدا کنید)\nخالی = دریافت از همه شماره‌ها"
-            setText(rule.senderNumbers.joinToString("\n"))
-            setTextColor(Color.WHITE)
-            setHintTextColor(Color.GRAY)
-            background = inputBg()
-            setPadding(20, 20, 20, 20)
-            minLines = 2
+        // ۴. بخش شماره‌های مقصد (فوروارد) با کیبورد عددی و دکمه افزودن شماره
+        val targetsContainer = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        val targetEditList = mutableListOf<EditText>()
+
+        fun addTargetRow(initialNumber: String = "") {
+            val row = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, 6, 0, 6)
+            }
+            val numInput = EditText(context).apply {
+                hint = "شماره مقصد (مثال: 09121234567)"
+                inputType = InputType.TYPE_CLASS_PHONE
+                setTextColor(Color.WHITE)
+                setHintTextColor(Color.GRAY)
+                setText(initialNumber)
+                background = inputBg()
+                setPadding(20, 16, 20, 16)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            targetEditList.add(numInput)
+
+            val removeBtn = Button(context).apply {
+                text = "✕"
+                setTextColor(Color.parseColor("#EF4444"))
+                textSize = 16f
+                background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#27153B"))
+                    cornerRadius = 12f
+                }
+                setOnClickListener {
+                    targetsContainer.removeView(row)
+                    targetEditList.remove(numInput)
+                }
+            }
+
+            row.addView(numInput)
+            row.addView(spaceH(10))
+            row.addView(removeBtn)
+            targetsContainer.addView(row)
         }
 
-        // ۵. چندین شماره مقصد (با کاما یا خط جدید)
-        val targetsInput = EditText(context).apply {
-            hint = "شماره‌های مقصد برای فوروارد پیامک (با کاما یا خط جدید)\nمثال: 09121111111، 09352222222"
-            setText(rule.targetNumbers.joinToString("\n"))
-            setTextColor(Color.WHITE)
-            setHintTextColor(Color.GRAY)
-            background = inputBg()
-            setPadding(20, 20, 20, 20)
-            minLines = 3
+        // پر کردن مقادیر قبلی یا حداقل یک فیلد خالی
+        if (rule.targetNumbers.isNotEmpty()) {
+            rule.targetNumbers.forEach { addTargetRow(it) }
+        } else {
+            addTargetRow()
         }
 
-        // ۶. چندین متن / کلمه فیلتر
-        val keywordsInput = EditText(context).apply {
-            hint = "متن‌ها یا کلمات کلیدی (با کاما یا خط جدید جدا کنید)\nمثال: رمز پویا، کد ورود، واریز"
-            setText(rule.filterKeywords.joinToString("\n"))
-            setTextColor(Color.WHITE)
-            setHintTextColor(Color.GRAY)
-            background = inputBg()
-            setPadding(20, 20, 20, 20)
-            minLines = 3
+        val addTargetBtn = Button(context).apply {
+            text = "➕ افزودن شماره مقصد دیگر"
+            setTextColor(Color.parseColor("#FBBF24"))
+            textSize = 13f
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#1E113D"))
+                cornerRadius = 12f
+                setStroke(2, Color.parseColor("#6D28D9"))
+            }
+            setOnClickListener { addTargetRow() }
+        }
+
+        // ۵. بخش شماره‌های مبدأ (فرستنده) با کیبورد عددی و دکمه افزودن شماره
+        val sendersContainer = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        val senderEditList = mutableListOf<EditText>()
+
+        fun addSenderRow(initialNumber: String = "") {
+            val row = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, 6, 0, 6)
+            }
+            val numInput = EditText(context).apply {
+                hint = "شماره مبدأ (مثال: 2000... یا شماره بانک)"
+                inputType = InputType.TYPE_CLASS_PHONE
+                setTextColor(Color.WHITE)
+                setHintTextColor(Color.GRAY)
+                setText(initialNumber)
+                background = inputBg()
+                setPadding(20, 16, 20, 16)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            senderEditList.add(numInput)
+
+            val removeBtn = Button(context).apply {
+                text = "✕"
+                setTextColor(Color.parseColor("#EF4444"))
+                textSize = 16f
+                background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#27153B"))
+                    cornerRadius = 12f
+                }
+                setOnClickListener {
+                    sendersContainer.removeView(row)
+                    senderEditList.remove(numInput)
+                }
+            }
+
+            row.addView(numInput)
+            row.addView(spaceH(10))
+            row.addView(removeBtn)
+            sendersContainer.addView(row)
+        }
+
+        if (rule.senderNumbers.isNotEmpty()) {
+            rule.senderNumbers.forEach { addSenderRow(it) }
+        }
+
+        val addSenderBtn = Button(context).apply {
+            text = "➕ افزودن شماره مبدأ اختصاصی"
+            setTextColor(Color.parseColor("#C4B5FD"))
+            textSize = 13f
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#1E113D"))
+                cornerRadius = 12f
+                setStroke(2, Color.parseColor("#4C1D95"))
+            }
+            setOnClickListener { addSenderRow() }
+        }
+
+        // ۶. کلمات کلیدی و شرط متن
+        val keywordsContainer = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        val keywordEditList = mutableListOf<EditText>()
+
+        fun addKeywordRow(initialKeyword: String = "") {
+            val row = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, 6, 0, 6)
+            }
+            val kwInput = EditText(context).apply {
+                hint = "کلمه یا عبارت شرطی (مثال: رمز پویا)"
+                setTextColor(Color.WHITE)
+                setHintTextColor(Color.GRAY)
+                setText(initialKeyword)
+                background = inputBg()
+                setPadding(20, 16, 20, 16)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            keywordEditList.add(kwInput)
+
+            val removeBtn = Button(context).apply {
+                text = "✕"
+                setTextColor(Color.parseColor("#EF4444"))
+                textSize = 16f
+                background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#27153B"))
+                    cornerRadius = 12f
+                }
+                setOnClickListener {
+                    keywordsContainer.removeView(row)
+                    keywordEditList.remove(kwInput)
+                }
+            }
+
+            row.addView(kwInput)
+            row.addView(spaceH(10))
+            row.addView(removeBtn)
+            keywordsContainer.addView(row)
+        }
+
+        if (rule.filterKeywords.isNotEmpty()) {
+            rule.filterKeywords.forEach { addKeywordRow(it) }
+        }
+
+        val addKeywordBtn = Button(context).apply {
+            text = "➕ افزودن کلمه یا شرط متن"
+            setTextColor(Color.parseColor("#C4B5FD"))
+            textSize = 13f
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#1E113D"))
+                cornerRadius = 12f
+                setStroke(2, Color.parseColor("#4C1D95"))
+            }
+            setOnClickListener { addKeywordRow() }
         }
 
         val matchAllCheckbox = CheckBox(context).apply {
-            text = "تمام کلمات باید همزمان در متن پیامک موجود باشند"
+            text = "تمام کلمات باید همزمان در متن پیامک باشند"
             setTextColor(Color.parseColor("#E9D5FF"))
             isChecked = rule.matchAllKeywords
         }
 
+        // دکمه ذخیره
         val saveBtn = Button(context).apply {
             text = "ذخیره تغییرات پروژه"
             setTextColor(Color.BLACK)
+            textSize = 15f
             setBackgroundColor(Color.parseColor("#F59E0B"))
             setOnClickListener {
                 val title = titleInput.text.toString().trim()
@@ -121,25 +272,14 @@ class RuleEditDialog(
                     return@setOnClickListener
                 }
 
-                val targets = targetsInput.text.toString()
-                    .split("\n", ",", "،")
-                    .map { it.trim() }
-                    .filter { it.isNotEmpty() }
-
+                val targets = targetEditList.map { it.text.toString().trim() }.filter { it.isNotEmpty() }
                 if (targets.isEmpty()) {
-                    Toast.makeText(context, "حداقل باید یک شماره مقصد وارد کنید", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "حداقل باید یک شماره مقصد معتبر وارد کنید", Toast.LENGTH_SHORT).show()
                     return@setOnClickListener
                 }
 
-                val senders = sendersInput.text.toString()
-                    .split("\n", ",", "،")
-                    .map { it.trim() }
-                    .filter { it.isNotEmpty() }
-
-                val keywords = keywordsInput.text.toString()
-                    .split("\n", ",", "،")
-                    .map { it.trim() }
-                    .filter { it.isNotEmpty() }
+                val senders = senderEditList.map { it.text.toString().trim() }.filter { it.isNotEmpty() }
+                val keywords = keywordEditList.map { it.text.toString().trim() }.filter { it.isNotEmpty() }
 
                 rule.title = title
                 rule.receiveSimSlot = receiveSimSpinner.selectedItemPosition
@@ -155,40 +295,38 @@ class RuleEditDialog(
         }
 
         root.addView(headerText)
-        root.addView(label("نام موضوع یا پروژه:"))
+        root.addView(label("📌 نام موضوع یا پروژه:"))
         root.addView(titleInput)
         root.addView(space(16))
-        root.addView(label("سیم‌کارت دریافت‌کننده پیام:"))
+
+        root.addView(label("📥 سیم‌کارت دریافت‌کننده پیام:"))
         root.addView(receiveSimSpinner)
         root.addView(space(16))
-        root.addView(label("سیم‌کارت ارسال‌کننده پیام:"))
+
+        root.addView(label("📤 سیم‌کارت ارسال‌کننده پیام:"))
         root.addView(sendSimSpinner)
-        root.addView(space(16))
-        root.addView(label("شماره‌های مقصد (ارسال همزمان به این شماره‌ها):"))
-        root.addView(targetsInput)
-        root.addView(space(16))
-        root.addView(label("شماره‌های مبدأ (اختیاری - چند شماره):"))
-        root.addView(sendersInput)
-        root.addView(space(16))
-        root.addView(label("کلمات یا متن‌های شرطی پیامک (اختیاری - چند متن):"))
-        root.addView(keywordsInput)
+        root.addView(space(20))
+
+        root.addView(label("🎯 شماره‌های مقصد (پیامک به این خطوط فوروارد می‌شود):"))
+        root.addView(targetsContainer)
+        root.addView(space(6))
+        root.addView(addTargetBtn)
+        root.addView(space(20))
+
+        root.addView(label("📞 شماره‌های مبدأ (اختیاری - اگر خالی باشد از همه شماره‌ها قبول می‌کند):"))
+        root.addView(sendersContainer)
+        root.addView(space(6))
+        root.addView(addSenderBtn)
+        root.addView(space(20))
+
+        root.addView(label("💬 فیلتر کلمات یا متن پیامک (اختیاری):"))
+        root.addView(keywordsContainer)
+        root.addView(space(6))
+        root.addView(addKeywordBtn)
         root.addView(matchAllCheckbox)
         root.addView(space(24))
-        root.addView(saveBtn)
 
-        if (!isNew && onDeleteListener != null) {
-            val deleteBtn = Button(context).apply {
-                text = "حذف این پروژه"
-                setTextColor(Color.WHITE)
-                setBackgroundColor(Color.parseColor("#EF4444"))
-                setOnClickListener {
-                    onDeleteListener.invoke(rule.id)
-                    dialog.dismiss()
-                }
-            }
-            root.addView(space(12))
-            root.addView(deleteBtn)
-        }
+        root.addView(saveBtn)
 
         scrollView.addView(root)
         dialog.setContentView(scrollView)
@@ -212,6 +350,12 @@ class RuleEditDialog(
     private fun space(h: Int): View {
         return View(context).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, h)
+        }
+    }
+
+    private fun spaceH(w: Int): View {
+        return View(context).apply {
+            layoutParams = LinearLayout.LayoutParams(w, LinearLayout.LayoutParams.MATCH_PARENT)
         }
     }
 
