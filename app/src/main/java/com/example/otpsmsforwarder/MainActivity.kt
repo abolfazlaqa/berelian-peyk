@@ -7,7 +7,6 @@ import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
-import android.telephony.SubscriptionInfo
 import android.telephony.SubscriptionManager
 import android.view.Gravity
 import android.view.View
@@ -19,12 +18,11 @@ import androidx.core.content.ContextCompat
 class MainActivity : AppCompatActivity() {
 
     private val PERMISSION_REQUEST_CODE = 101
+    private lateinit var rulesContainer: LinearLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         checkPermissions()
-
-        val prefs = getSharedPreferences("ForwarderSettings", Context.MODE_PRIVATE)
 
         val scrollView = ScrollView(this).apply {
             setBackgroundColor(Color.parseColor("#0B0717"))
@@ -33,177 +31,209 @@ class MainActivity : AppCompatActivity() {
 
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(40, 50, 40, 50)
+            setPadding(36, 48, 36, 48)
             gravity = Gravity.CENTER_HORIZONTAL
         }
 
+        // هدر برنامه
         val title = TextView(this).apply {
             text = "برلیان پیک"
-            textSize = 26f
+            textSize = 28f
             setTextColor(Color.parseColor("#FBBF24"))
             gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 8)
+            setPadding(0, 0, 0, 6)
         }
 
         val subtitle = TextView(this).apply {
-            text = "مدیریت و هدایت خودکار پیامک (پشتیبانی کامل از ۲ سیم‌کارت)"
+            text = "سامانه مدیریت پروژه‌های هدایت هوشمند پیامک"
             textSize = 13f
             setTextColor(Color.parseColor("#C4B5FD"))
             gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 32)
+            setPadding(0, 0, 0, 24)
         }
 
-        // کارت وضعیت سیم‌کارت‌های فعال در گوشی
+        // کارت اطلاعات سیم‌کارت‌های فعال گوشی
         val simInfoCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(28, 24, 28, 24)
+            setPadding(24, 20, 24, 20)
             background = GradientDrawable().apply {
-                setColor(Color.parseColor("#1E113D"))
+                setColor(Color.parseColor("#1A1038"))
                 cornerRadius = 20f
                 setStroke(2, Color.parseColor("#6D28D9"))
             }
         }
-
-        val simCardTitle = TextView(this).apply {
-            text = "📱 سیم‌کارت‌های شناسایی شده در گوشی شما:"
+        val simTitle = TextView(this).apply {
+            text = "📱 سیم‌کارت‌های فعال در گوشی:"
             setTextColor(Color.parseColor("#FDE68A"))
-            textSize = 14f
-            setPadding(0, 0, 0, 8)
+            textSize = 13f
+            setPadding(0, 0, 0, 6)
         }
-        val simCardsDetail = TextView(this).apply {
+        val simDesc = TextView(this).apply {
             text = getDetectedSimsInfo()
             setTextColor(Color.WHITE)
             textSize = 12f
-            setLineSpacing(6f, 1f)
+            setLineSpacing(4f, 1f)
         }
-        simInfoCard.addView(simCardTitle)
-        simInfoCard.addView(simCardsDetail)
+        simInfoCard.addView(simTitle)
+        simInfoCard.addView(simDesc)
 
-        // کارت تنظیمات
-        val card = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(32, 32, 32, 32)
-            background = GradientDrawable().apply {
-                setColor(Color.parseColor("#160D2E"))
-                cornerRadius = 28f
-                setStroke(2, Color.parseColor("#4C1D95"))
-            }
-        }
-
-        val statusSwitch = Switch(this).apply {
-            val active = prefs.getBoolean("is_active", true)
-            text = if (active) "وضعیت سرویس: فعال و آماده کار" else "وضعیت سرویس: متوقف"
-            setTextColor(if (active) Color.parseColor("#34D399") else Color.parseColor("#F87171"))
-            isChecked = active
-            setOnCheckedChangeListener { _, isChecked ->
-                text = if (isChecked) "وضعیت سرویس: فعال و آماده کار" else "وضعیت سرویس: متوقف"
-                setTextColor(if (isChecked) Color.parseColor("#34D399") else Color.parseColor("#F87171"))
-            }
-        }
-
-        // انتخاب سیم‌کارت دریافت‌کننده پیامک
-        val receiveSimSpinner = Spinner(this).apply {
-            val simOptions = arrayOf("هر دو سیم‌کارت (پیش‌فرض)", "فقط سیم‌کارت ۱", "فقط سیم‌کارت ۲")
-            val adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, simOptions)
-            this.adapter = adapter
-            setSelection(prefs.getInt("filter_sim_slot", 0))
-            background = inputBg()
-            setPadding(16, 16, 16, 16)
-        }
-
-        // انتخاب سیم‌کارت ارسال‌کننده پیامک
-        val sendSimSpinner = Spinner(this).apply {
-            val simOptions = arrayOf("سیم‌کارت پیش‌فرض سیستم", "ارسال از سیم‌کارت ۱", "ارسال از سیم‌کارت ۲")
-            val adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, simOptions)
-            this.adapter = adapter
-            setSelection(prefs.getInt("send_sim_slot", 0))
-            background = inputBg()
-            setPadding(16, 16, 16, 16)
-        }
-
-        val targetInput = EditText(this).apply {
-            hint = "شماره مقصد پیامک (مثال: 09121234567)"
-            setHintTextColor(Color.GRAY)
-            setTextColor(Color.WHITE)
-            setText(prefs.getString("target_number", ""))
-            setPadding(20, 20, 20, 20)
-            background = inputBg()
-        }
-
-        val filterSenderInput = EditText(this).apply {
-            hint = "شماره فرستنده مبدأ (اختیاری - مثل بانک یا شماره خاص)"
-            setHintTextColor(Color.GRAY)
-            setTextColor(Color.WHITE)
-            setText(prefs.getString("filter_sender", ""))
-            setPadding(20, 20, 20, 20)
-            background = inputBg()
-        }
-
-        val filterTextInput = EditText(this).apply {
-            hint = "کلمه یا شرط در متن پیامک (اختیاری)"
-            setHintTextColor(Color.GRAY)
-            setTextColor(Color.WHITE)
-            setText(prefs.getString("filter_text", ""))
-            setPadding(20, 20, 20, 20)
-            background = inputBg()
-        }
-
-        val saveButton = Button(this).apply {
-            text = "ذخیره و فعال‌سازی برلیان پیک"
+        // دکمه بزرگ ایجاد پروژه / موضوع جدید
+        val addProjectBtn = Button(this).apply {
+            text = "➕ افزودن پروژه یا موضوع جدید"
             setTextColor(Color.BLACK)
+            textSize = 15f
             setBackgroundColor(Color.parseColor("#F59E0B"))
+            setPadding(24, 20, 24, 20)
             setOnClickListener {
-                val target = targetInput.text.toString().trim()
-                if (target.isEmpty()) {
-                    Toast.makeText(this@MainActivity, "لطفاً شماره مقصد را مشخص کنید", Toast.LENGTH_SHORT).show()
-                    return@setOnClickListener
-                }
-
-                prefs.edit()
-                    .putBoolean("is_active", statusSwitch.isChecked)
-                    .putInt("filter_sim_slot", receiveSimSpinner.selectedItemPosition)
-                    .putInt("send_sim_slot", sendSimSpinner.selectedItemPosition)
-                    .putString("target_number", target)
-                    .putString("filter_sender", filterSenderInput.text.toString().trim())
-                    .putString("filter_text", filterTextInput.text.toString().trim())
-                    .apply()
-
-                Toast.makeText(this@MainActivity, "تنظیمات با موفقیت ذخیره شد. سرویس فعال است!", Toast.LENGTH_LONG).show()
+                RuleEditDialog(
+                    context = this@MainActivity,
+                    existingRule = null,
+                    onSaveListener = { newRule ->
+                        RuleRepository.saveRule(this@MainActivity, newRule)
+                        refreshRulesList()
+                        Toast.makeText(this@MainActivity, "پروژه '${newRule.title}' با موفقیت ساخته شد", Toast.LENGTH_SHORT).show()
+                    }
+                ).show()
             }
         }
 
-        card.addView(statusSwitch)
-        card.addView(space(20))
-        card.addView(label("کدام سیم‌کارت پیامک‌ها را دریافت و فیلتر کند؟"))
-        card.addView(receiveSimSpinner)
-        card.addView(space(18))
-        card.addView(label("ارسال به مقصد از طریق کدام سیم‌کارت انجام شود؟"))
-        card.addView(sendSimSpinner)
-        card.addView(space(18))
-        card.addView(label("شماره مقصد (پیامک به این شماره فوروارد شود):"))
-        card.addView(targetInput)
-        card.addView(space(18))
-        card.addView(label("فیلتر شماره مبدأ (اختیاری):"))
-        card.addView(filterSenderInput)
-        card.addView(space(18))
-        card.addView(label("فیلتر متن پیامک (اختیاری):"))
-        card.addView(filterTextInput)
-        card.addView(space(28))
-        card.addView(saveButton)
+        val listTitle = TextView(this).apply {
+            text = "📋 لیست پروژه‌ها و قوانین شما:"
+            setTextColor(Color.parseColor("#E9D5FF"))
+            textSize = 16f
+            setPadding(0, 28, 0, 12)
+            gravity = Gravity.RIGHT
+        }
+
+        // لیست داینامیک پروژه‌ها
+        rulesContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
 
         layout.addView(title)
         layout.addView(subtitle)
         layout.addView(simInfoCard)
         layout.addView(space(20))
-        layout.addView(card)
-        scrollView.addView(layout)
+        layout.addView(addProjectBtn)
+        layout.addView(listTitle)
+        layout.addView(rulesContainer)
 
+        scrollView.addView(layout)
         setContentView(scrollView)
+
+        refreshRulesList()
+    }
+
+    private fun refreshRulesList() {
+        rulesContainer.removeAllViews()
+        val rules = RuleRepository.getAllRules(this)
+
+        if (rules.isEmpty()) {
+            val emptyTv = TextView(this).apply {
+                text = "هنوز پروژه‌ای ثبت نشده است.\nبرای شروع روی دکمه «افزودن پروژه جدید» بزنید."
+                setTextColor(Color.GRAY)
+                textSize = 13f
+                gravity = Gravity.CENTER
+                setPadding(0, 32, 0, 32)
+            }
+            rulesContainer.addView(emptyTv)
+            return
+        }
+
+        for (rule in rules) {
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(28, 24, 28, 24)
+                background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#150D2E"))
+                    cornerRadius = 24f
+                    setStroke(2, if (rule.isEnabled) Color.parseColor("#4C1D95") else Color.parseColor("#374151"))
+                }
+            }
+
+            // سطر هدر پروژه: عنوان و سوئیچ فعال/غیرفعال
+            val headerRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+
+            val projectTitleTv = TextView(this).apply {
+                text = rule.title
+                textSize = 16f
+                setTextColor(if (rule.isEnabled) Color.parseColor("#FBBF24") else Color.GRAY)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+
+            val switchBtn = Switch(this).apply {
+                isChecked = rule.isEnabled
+                setOnCheckedChangeListener { _, isChecked ->
+                    RuleRepository.toggleRule(this@MainActivity, rule.id, isChecked)
+                    refreshRulesList()
+                }
+            }
+
+            headerRow.addView(projectTitleTv)
+            headerRow.addView(switchBtn)
+
+            // جزئیات سیم‌کارت‌ها و شماره‌ها
+            val detailsTv = TextView(this).apply {
+                val targetsText = if (rule.targetNumbers.isNotEmpty()) rule.targetNumbers.joinToString(", ") else "تعریف نشده!"
+                val sendersText = if (rule.senderNumbers.isNotEmpty()) rule.senderNumbers.joinToString(", ") else "تمام فرستنده‌ها"
+                val keywordsText = if (rule.filterKeywords.isNotEmpty()) rule.filterKeywords.joinToString(" ، ") else "تمام پیامک‌ها"
+
+                text = "• مقاصد (${rule.targetNumbers.size} خط): $targetsText\n" +
+                       "• مبادی: $sendersText\n" +
+                       "• فیلتر متن: $keywordsText\n" +
+                       "• سیم دریافت: ${simSlotName(rule.receiveSimSlot)} | سیم ارسال: ${simSlotName(rule.sendSimSlot)}"
+                textSize = 12f
+                setTextColor(Color.parseColor("#DDD6FE"))
+                setLineSpacing(4f, 1f)
+                setPadding(0, 12, 0, 16)
+            }
+
+            val editBtn = Button(this).apply {
+                text = "⚙️ ویرایش پروژه و شماره‌ها"
+                setTextColor(Color.WHITE)
+                textSize = 12f
+                setBackgroundColor(Color.parseColor("#4338CA"))
+                setOnClickListener {
+                    RuleEditDialog(
+                        context = this@MainActivity,
+                        existingRule = rule,
+                        onSaveListener = { updatedRule ->
+                            RuleRepository.saveRule(this@MainActivity, updatedRule)
+                            refreshRulesList()
+                            Toast.makeText(this@MainActivity, "پروژه به‌روزرسانی شد", Toast.LENGTH_SHORT).show()
+                        },
+                        onDeleteListener = { ruleId ->
+                            RuleRepository.deleteRule(this@MainActivity, ruleId)
+                            refreshRulesList()
+                            Toast.makeText(this@MainActivity, "پروژه حذف گردید", Toast.LENGTH_SHORT).show()
+                        }
+                    ).show()
+                }
+            }
+
+            card.addView(headerRow)
+            card.addView(detailsTv)
+            card.addView(editBtn)
+
+            rulesContainer.addView(card)
+            rulesContainer.addView(space(18))
+        }
+    }
+
+    private fun simSlotName(slot: Int): String {
+        return when (slot) {
+            1 -> "سیم ۱"
+            2 -> "سیم ۲"
+            else -> "پیش‌فرض"
+        }
     }
 
     private fun getDetectedSimsInfo(): String {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
-            return "مجوز دسترسی به سیم‌کارت‌ها هنوز داده نشده است.\nلطفاً در پیام اول باز شدن برنامه روی «اجازه دادن (Allow)» بزنید."
+            return "دسترسی به سیم‌کارت‌ها هنوز داده نشده است."
         }
 
         return try {
@@ -216,45 +246,18 @@ class MainActivity : AppCompatActivity() {
                 for (info in list) {
                     val slot = info.simSlotIndex + 1
                     val carrier = info.displayName ?: info.carrierName ?: "اپراتور نامشخص"
-                    val number = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        try {
-                            subManager.getPhoneNumber(info.subscriptionId)
-                        } catch (e: Exception) {
-                            info.number ?: ""
-                        }
-                    } else {
-                        info.number ?: ""
-                    }
-                    val numText = if (!number.isNullOrEmpty()) " - شماره: $number" else ""
-                    sb.append("• سیم‌کارت $slot: $carrier $numText\n")
+                    sb.append("• سیم‌کارت $slot: $carrier\n")
                 }
                 sb.toString().trim()
             }
         } catch (e: Exception) {
-            "خطا در خواندن اطلاعات سیم‌کارت‌ها: ${e.message}"
-        }
-    }
-
-    private fun label(txt: String): TextView {
-        return TextView(this).apply {
-            text = txt
-            setTextColor(Color.parseColor("#E9D5FF"))
-            textSize = 13f
-            setPadding(0, 0, 0, 6)
+            "وضعیت سیم‌کارت‌ها آماده است."
         }
     }
 
     private fun space(h: Int): View {
         return View(this).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, h)
-        }
-    }
-
-    private fun inputBg(): GradientDrawable {
-        return GradientDrawable().apply {
-            setColor(Color.parseColor("#0B0717"))
-            cornerRadius = 14f
-            setStroke(2, Color.parseColor("#374151"))
         }
     }
 
@@ -281,7 +284,6 @@ class MainActivity : AppCompatActivity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == PERMISSION_REQUEST_CODE) {
-            // بازآفرینی اکتیویتی تا اطلاعات سیم‌کارت‌ها فورا در صفحه آپدیت شود
             recreate()
         }
     }

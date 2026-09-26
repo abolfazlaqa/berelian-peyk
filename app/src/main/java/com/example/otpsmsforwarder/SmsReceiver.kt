@@ -8,7 +8,6 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Telephony
 import android.telephony.SmsManager
-import android.telephony.SubscriptionInfo
 import android.telephony.SubscriptionManager
 import android.util.Log
 import androidx.core.content.ContextCompat
@@ -17,37 +16,6 @@ class SmsReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
-
-        val prefs = context.getSharedPreferences("ForwarderSettings", Context.MODE_PRIVATE)
-        val isServiceActive = prefs.getBoolean("is_active", true)
-        if (!isServiceActive) {
-            Log.d(TAG, "سرویس غیرفعال است.")
-            return
-        }
-
-        val targetNumber = prefs.getString("target_number", "")?.trim() ?: ""
-        if (targetNumber.isEmpty()) {
-            Log.w(TAG, "شماره مقصد تنظیم نشده است.")
-            return
-        }
-
-        // فیلتر سیم‌کارت دریافت‌کننده (0: هر سیم‌کارتی، 1: سیم 1، 2: سیم 2)
-        val filterSimSlot = prefs.getInt("filter_sim_slot", 0)
-
-        // تشخیص اینکه پیامک روی کدام سیم‌کارت وارد شده است
-        val incomingSubId = intent.getIntExtra("subscription", -1)
-        val incomingSlotIndex = getSlotIndexFromSubId(context, incomingSubId)
-
-        if (filterSimSlot > 0 && incomingSlotIndex != -1) {
-            val expectedSlotIndex = filterSimSlot - 1 // 1 -> slot 0, 2 -> slot 1
-            if (incomingSlotIndex != expectedSlotIndex) {
-                Log.d(TAG, "پیامک روی سیم‌کارت ${incomingSlotIndex + 1} دریافت شد اما فیلتر روی سیم‌کارت $filterSimSlot تنظیم است.")
-                return
-            }
-        }
-
-        val filterSender = prefs.getString("filter_sender", "")?.trim() ?: ""
-        val filterText = prefs.getString("filter_text", "")?.trim() ?: ""
 
         val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
         if (messages.isNullOrEmpty()) return
@@ -63,32 +31,65 @@ class SmsReceiver : BroadcastReceiver() {
         }
 
         val fullBody = fullBodyBuilder.toString()
-        Log.i(TAG, "پیامک دریافت شد از: $senderNumber روی سیم‌کارت: ${if (incomingSlotIndex >= 0) incomingSlotIndex + 1 else "نامشخص"} با متن: $fullBody")
+        val incomingSubId = intent.getIntExtra("subscription", -1)
+        val incomingSlotIndex = getSlotIndexFromSubId(context, incomingSubId)
 
-        // 1. بررسی شرط فرستنده (در صورت پر بودن)
-        if (filterSender.isNotEmpty()) {
-            val normSender = senderNumber.replace("+98", "0").replace("[^0-9]".toRegex(), "")
-            val normFilter = filterSender.replace("+98", "0").replace("[^0-9]".toRegex(), "")
-            if (!normSender.contains(normFilter) && !senderNumber.contains(filterSender)) {
-                Log.d(TAG, "فرستنده با شرط مطابقت ندارد.")
-                return
+        Log.i(TAG, "پیامک دریافت شد از: $senderNumber روی سیم‌کارت: ${if (incomingSlotIndex >= 0) incomingSlotIndex + 1 else "نامشخص"}")
+
+        // دریافت تمام پروژه‌ها / موضوعات تعریف‌شده در برنامه
+        val allRules = RuleRepository.getAllRules(context)
+
+        for (rule in allRules) {
+            if (!rule.isEnabled) continue
+            if (rule.targetNumbers.isEmpty()) continue
+
+            // ۱. بررسی تطابق سیم‌کارت دریافت‌کننده
+            if (rule.receiveSimSlot > 0 && incomingSlotIndex != -1) {
+                val expectedSlot = rule.receiveSimSlot - 1
+                if (incomingSlotIndex != expectedSlot) {
+                    continue
+                }
+            }
+
+            // ۲. بررسی شرط چندین شماره مبدأ (در صورت تعریف شدن)
+            if (rule.senderNumbers.isNotEmpty()) {
+                val normIncomingSender = normalizePhoneNumber(senderNumber)
+                val matchesAnySender = rule.senderNumbers.any { definedSender ->
+                    val normDefined = normalizePhoneNumber(definedSender)
+                    normIncomingSender.contains(normDefined) || senderNumber.contains(definedSender)
+                }
+                if (!matchesAnySender) {
+                    continue
+                }
+            }
+
+            // ۳. بررسی شرط چندین کلمه / متن پیامک (در صورت تعریف شدن)
+            if (rule.filterKeywords.isNotEmpty()) {
+                val lowerBody = fullBody.lowercase()
+                val keywordMatched = if (rule.matchAllKeywords) {
+                    rule.filterKeywords.all { lowerBody.contains(it.trim().lowercase()) }
+                } else {
+                    rule.filterKeywords.any { lowerBody.contains(it.trim().lowercase()) }
+                }
+
+                if (!keywordMatched) {
+                    continue
+                }
+            }
+
+            // ۴. ارسال پیامک به چندین شماره مقصد تعریف‌شده در این پروژه
+            Log.i(TAG, "شرایط پروژه '${rule.title}' برقرار شد. ارسال به ${rule.targetNumbers.size} شماره مقصد...")
+            for (destNumber in rule.targetNumbers) {
+                val cleanDest = destNumber.trim()
+                if (cleanDest.isNotEmpty()) {
+                    sendSmsWithSim(context, cleanDest, fullBody, rule.sendSimSlot)
+                }
             }
         }
+    }
 
-        // 2. بررسی شرط متن پیامک (در صورت پر بودن)
-        if (filterText.isNotEmpty()) {
-            if (!fullBody.lowercase().contains(filterText.lowercase())) {
-                Log.d(TAG, "متن پیامک با شرط مطابقت ندارد.")
-                return
-            }
-        }
-
-        // سیم‌کارت انتخابی برای ارسال پیامک (0: پیش‌فرض، 1: سیم 1، 2: سیم 2)
-        val sendSimSlot = prefs.getInt("send_sim_slot", 0)
-        val outgoingMessage = fullBody
-
-        // ارسال پیامک با در نظر گرفتن سیم‌کارت مورد نظر
-        sendSmsWithSim(context, targetNumber, outgoingMessage, sendSimSlot)
+    private fun normalizePhoneNumber(num: String): String {
+        return num.replace("+98", "0").replace("[^0-9]".toRegex(), "")
     }
 
     private fun getSlotIndexFromSubId(context: Context, subId: Int): Int {
@@ -141,9 +142,9 @@ class SmsReceiver : BroadcastReceiver() {
             } else {
                 smsManager.sendTextMessage(destination, null, text, null, null)
             }
-            Log.i(TAG, "پیامک با موفقیت از سیم‌کارت انتخابی به $destination ارسال شد.")
+            Log.i(TAG, "پیامک با موفقیت به $destination ارسال شد.")
         } catch (e: Exception) {
-            Log.e(TAG, "خطا در ارسال پیامک", e)
+            Log.e(TAG, "خطا در ارسال پیامک به $destination", e)
         }
     }
 
